@@ -74,7 +74,14 @@ export async function saveRecording(record, onProgress = () => {}) {
         },
       });
       state.upload.options.onProgress = (sent, total) => onProgress(Math.floor(sent / total * 100));
-      state.upload.options.onError = (error) => reject(uploadErrorMessage(error));
+      state.upload.options.onError = (error) => {
+        // A failed TUS attempt can leave an expired or rejected signed token in
+        // this in-memory state. Drop it so the next Save asks the server for a
+        // fresh signed upload token.
+        state.upload = null;
+        pending.delete(record.id);
+        reject(uploadErrorMessage(error));
+      };
       state.upload.options.onSuccess = () => { state.uploaded = true; resolve(); };
       state.upload.start();
     });
