@@ -1,4 +1,7 @@
+import { saveRecording } from './recording-storage';
+
 let initialized = false;
+const MAX_VIDEO_DURATION_MS = 60 * 60 * 1000;
 
 export function initializeRecorder() {
   if (initialized) return;
@@ -7,6 +10,7 @@ export function initializeRecorder() {
   const modeButtons = [...document.querySelectorAll('.mode-button')];
   const recordButton = $('#recordButton');
   const recordLabel = $('#recordLabel');
+  const saveButton = $('#saveButton');
   const status = $('#status');
   const statusText = status.querySelector('span');
   const preview = $('#livePreview');
@@ -24,9 +28,13 @@ export function initializeRecorder() {
   let chunks = [];
   let recordingBlob = null;
   let recordingUrl = null;
+  let completedRecording = null;
+  let activeSessionId = null;
+  let saving = false;
   let timerInterval = null;
+  let recordingLimitTimeout = null;
   let startedAt = 0;
-  let facingMode = 'environment';
+  const facingMode = 'environment';
   let toastTimer;
 
   sessionId.textContent = `FN—${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -48,8 +56,6 @@ export function initializeRecorder() {
       button.classList.toggle('selected', selected);
       button.setAttribute('aria-pressed', String(selected));
     });
-    $('#qualityLabel').textContent = mode === 'video' ? 'HD video' : 'Voice recording';
-    $('#inputLabel').textContent = mode === 'video' ? 'Camera & microphone' : 'Microphone';
     icon.innerHTML = icons[mode];
     title.textContent = mode === 'video' ? 'Your camera is ready' : 'Your microphone is ready';
     description.textContent = mode === 'video'
@@ -62,7 +68,13 @@ export function initializeRecorder() {
     if (recordingUrl) URL.revokeObjectURL(recordingUrl);
     recordingUrl = null;
     recordingBlob = null;
+    completedRecording = null;
+    saveButton.hidden = true;
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save video';
     preview.pause();
+    preview.controls = false;
+    preview.muted = true;
     preview.removeAttribute('src');
     preview.srcObject = null;
     preview.hidden = true;
@@ -74,6 +86,7 @@ export function initializeRecorder() {
     statusText.textContent = 'READY TO RECORD';
     timer.textContent = '00:00';
     clearInterval(timerInterval);
+    clearTimeout(recordingLimitTimeout);
   }
   function stopStream() {
     stream?.getTracks().forEach((track) => track.stop());
@@ -113,7 +126,24 @@ export function initializeRecorder() {
       });
       recorder.addEventListener('stop', finishRecording, { once: true });
       recorder.start(1000);
+      if (mode === 'video') {
+        const previousCode = sessionId.textContent;
+        let nextCode;
+        do {
+          nextCode = `FN\u2014${crypto.randomUUID().replaceAll('-', '').slice(0, 6).toUpperCase()}`;
+        } while (nextCode === previousCode);
+        sessionId.textContent = nextCode;
+      }
       startedAt = Date.now();
+      activeSessionId = sessionId.textContent;
+      if (mode === 'video') {
+        recordingLimitTimeout = setTimeout(() => {
+          if (recorder?.state === 'recording') {
+            recorder.stop();
+            notify('Video stopped automatically after reaching the 1-hour limit. Your recording is ready to download.');
+          }
+        }, MAX_VIDEO_DURATION_MS);
+      }
       timerInterval = setInterval(() => { timer.textContent = formatDuration(Date.now() - startedAt); }, 250);
       recordButton.classList.add('recording');
       recordLabel.textContent = 'Stop recording';
@@ -131,10 +161,22 @@ export function initializeRecorder() {
     }
   }
   function finishRecording() {
+    recordButton.disabled = false;
+    modeButtons.forEach((button) => { button.disabled = false; });
     clearInterval(timerInterval);
+    clearTimeout(recordingLimitTimeout);
     timer.textContent = formatDuration(Date.now() - startedAt);
     const mimeType = recorder?.mimeType || (mode === 'video' ? 'video/webm' : 'audio/webm');
     recordingBlob = new Blob(chunks, { type: mimeType });
+    completedRecording = {
+      id: crypto.randomUUID(),
+      sessionId: activeSessionId,
+      blob: recordingBlob,
+      mimeType,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMs: Date.now() - startedAt,
+    };
+    saveButton.hidden = mode !== 'video';
     recordingUrl = URL.createObjectURL(recordingBlob);
     stopStream();
     if (mode === 'video') {
@@ -151,38 +193,47 @@ export function initializeRecorder() {
     }
     overlay.hidden = true;
     recordButton.classList.remove('recording');
-    recordLabel.textContent = 'Download recording';
+    recordLabel.textContent = 'Start recording';
     status.classList.remove('recording');
     statusText.textContent = 'RECORDING READY';
   }
-  function downloadRecording() {
-    if (!recordingBlob || !recordingUrl) return;
-    const extension = recordingBlob.type.includes('mp4') ? 'mp4' : (mode === 'audio' ? 'webm' : 'webm');
-    const caseName = $('#caseTitle').value.trim().replace(/[^a-z0-9-_]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
-    const filename = `${caseName || 'fieldnote'}-${sessionId.textContent.replace('FN—', '').toLowerCase()}.${extension}`;
-    const link = document.createElement('a');
-    link.href = recordingUrl;
-    link.download = filename;
-    link.click();
-    notify('Recording downloaded to this device.');
-  }
-  recordButton.addEventListener('click', () => {
-    if (recorder?.state === 'recording') recorder.stop();
-    else if (recordingBlob) downloadRecording();
-    else startRecording();
-  });
-  modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
-  $('#flipButton').addEventListener('click', async () => {
-    if (mode !== 'video' || recorder?.state === 'recording') return;
-    facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    if (stream) {
-      stopStream();
-      await startRecording();
-      if (recorder?.state === 'recording') recorder.stop();
-      notify(facingMode === 'user' ? 'Front camera selected.' : 'Rear camera selected.');
-    } else {
-      notify(facingMode === 'user' ? 'Front camera selected for your next recording.' : 'Rear camera selected for your next recording.');
+  saveButton.addEventListener('click', async () => {
+    if (!completedRecording || saving) return;
+    saving = true;
+    saveButton.disabled = true;
+    recordButton.disabled = true;
+    modeButtons.forEach((button) => { button.disabled = true; });
+    saveButton.textContent = 'Saving...';
+    try {
+      await saveRecording({
+        ...completedRecording,
+        title: $('#caseTitle').value.trim(),
+        savedAt: new Date().toISOString(),
+      });
+      saveButton.textContent = 'Saved on this device';
+      notify(`Video saved on this device with session ${completedRecording.sessionId}.`);
+    } catch {
+      saveButton.disabled = false;
+      saveButton.textContent = 'Save video';
+      notify('Could not save the video. Check available browser storage and try again.');
+    } finally {
+      saving = false;
+      recordButton.disabled = false;
+      modeButtons.forEach((button) => { button.disabled = false; });
     }
   });
-  $('#soundButton').addEventListener('click', () => notify('Microphone access is requested when you start recording.'));
+  recordButton.addEventListener('click', () => {
+    if (saving) return;
+    if (recorder?.state === 'recording') {
+      recordButton.disabled = true;
+      modeButtons.forEach((button) => { button.disabled = true; });
+      recorder.stop();
+    }
+    else {
+      resetRecording();
+      startRecording();
+    }
+  });
+  modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
+
 }
