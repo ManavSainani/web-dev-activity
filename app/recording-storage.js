@@ -1,5 +1,31 @@
 import { Upload } from 'tus-js-client';
 
+function uploadErrorMessage(error) {
+  const status = error?.originalResponse?.getStatus?.();
+  const responseBody = error?.originalResponse?.getBody?.();
+  let serverMessage = '';
+  if (responseBody) {
+    try {
+      const parsed = JSON.parse(responseBody);
+      serverMessage = parsed.message || parsed.error || '';
+    } catch {
+      // Keep a non-JSON response out of the UI; the HTTP status is still useful.
+    }
+  }
+
+  // Log only the response details, never the upload URL or x-signature token.
+  console.error('Supabase resumable upload failed', {
+    status: status || undefined,
+    message: error?.message,
+    serverMessage: serverMessage || undefined,
+  });
+
+  if (status) {
+    return new Error(`Supabase Storage upload failed (HTTP ${status})${serverMessage ? `: ${serverMessage}` : ''}. Check your connection and retry Save.`);
+  }
+  return new Error(`Video upload interrupted${error?.message ? `: ${error.message}` : ''}. Check your connection and retry Save.`);
+}
+
 async function post(path, body) {
   const response = await fetch(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -48,7 +74,7 @@ export async function saveRecording(record, onProgress = () => {}) {
         },
       });
       state.upload.options.onProgress = (sent, total) => onProgress(Math.floor(sent / total * 100));
-      state.upload.options.onError = () => reject(new Error('Video upload interrupted. Check your connection and retry Save.'));
+      state.upload.options.onError = (error) => reject(uploadErrorMessage(error));
       state.upload.options.onSuccess = () => { state.uploaded = true; resolve(); };
       state.upload.start();
     });
