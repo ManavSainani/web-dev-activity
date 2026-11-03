@@ -8,7 +8,7 @@ export default function Home() {
 
   return (
     <>
-    <div className="shell">
+    <div className="shell" inert>
       <aside className="sidebar">
         <a className="brand" href="#" aria-label="Fieldnote home"><span className="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.64 5.64l12.72 12.72m0-12.72L5.64 18.36"/></svg></span><span>fieldnote<span className="brand-dot">.</span></span></a>
         <div className="workspace-label">WORKSPACE</div>
@@ -20,7 +20,7 @@ export default function Home() {
       </aside>
 
       <main className="main">
-        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>New recording</strong></div><div className="top-actions"><span className="secure"><i></i> Secure session</span><button className="auth-button" id="authButton" type="button">Sign in to save</button><button className="help-button" aria-label="Help">?</button></div></header>
+        <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>New recording</strong></div><div className="top-actions"><span className="secure"><i></i> Public access</span><button className="auth-button" id="accessButton" type="button">Access key required</button><button className="help-button" aria-label="Help">?</button></div></header>
         <div className="content">
           <div className="page-heading"><div><div className="eyebrow">FIELD RECORDING</div><h1>Capture a moment.</h1><p className="subtitle">Create a secure audio or video recording for your research.</p></div><div className="session-id"><span>SESSION</span><strong id="sessionId">FN—000000</strong></div></div>
           <section className="recorder-card" aria-label="Recording controls">
@@ -34,18 +34,19 @@ export default function Home() {
       </main>
     </div>
     <div className="toast" id="toast" role="status" aria-live="polite"></div>
-    <dialog className="auth-dialog" id="authDialog">
-      <form id="authForm" className="auth-form">
-        <button className="dialog-close" id="authClose" type="button" aria-label="Close">×</button>
-        <div className="eyebrow">RESEARCHER ACCESS</div>
-        <h2>Sign in to save</h2>
-        <p>We’ll email you a secure sign-in link. Only department-approved accounts can access recordings.</p>
-        <label htmlFor="authEmail">Department email</label>
-        <input id="authEmail" type="email" required autoComplete="email" placeholder="you@university.edu" />
-        <button className="record-button auth-submit" type="submit" id="authSubmit">Email me a sign-in link</button>
-        <div className="field-hint" id="authMessage" aria-live="polite"></div>
+    <div className="access-overlay" id="accessGate" role="dialog" aria-modal="true" aria-labelledby="accessHeading">
+      <form id="accessForm" className="access-card">
+        <span className="access-lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3m-4 4v3"/></svg></span>
+        <div className="eyebrow">CRIMINOLOGY DEPARTMENT</div>
+        <h2 id="accessHeading">Enter your access key.</h2>
+        <p>This site is public. A one-time key is required to unlock the recording tools.</p>
+        <label htmlFor="accessToken">One-time access key</label>
+        <input id="accessToken" name="accessToken" type="text" inputMode="text" autoComplete="off" autoCapitalize="off" spellCheck="false" required placeholder="Paste your 64-character key" />
+        <button className="record-button access-submit" type="submit" id="accessSubmit">Unlock recorder</button>
+        <div className="access-message" id="accessMessage" aria-live="polite"></div>
+        <small>Keys expire after 24 hours and can only be used once. Recorder access lasts 30 minutes.</small>
       </form>
-    </dialog>
+    </div>
     </>
   );
 }

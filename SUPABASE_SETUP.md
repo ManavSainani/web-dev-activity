@@ -1,27 +1,32 @@
-# Supabase setup
+# Supabase access-key and recording setup
 
-The app saves each recording to a private Storage bucket and writes its title, owner, format, and duration to a `recordings` table. Users sign in with a department email magic link. The app does not use a service-role key.
+The site is public, but recording requires a database-issued one-time key. Keys are stored as SHA-256 hashes, expire after 24 hours by default, and are consumed atomically on first use. A successful key grants a signed, HTTP-only recording session for 30 minutes. Uploads use short-lived, single-object Supabase signed upload URLs; the service key stays on the server.
 
-## 1. Configure Supabase
+## 1. Set up the database
 
-1. In Supabase, open **SQL Editor**, paste in [`supabase/setup.sql`](supabase/setup.sql), and run it. This creates the private `recordings` bucket, metadata table, and owner-scoped Row Level Security policies.
-2. In **Authentication → URL Configuration**, add your local URL (for example `http://localhost:3000/**`) and your deployed Vercel URL (for example `https://your-app.vercel.app/**`) to the allowed redirect URLs.
-3. Keep public signups disabled and invite department researchers from **Authentication → Users**. The app requests magic-link sign-in for existing users only.
-4. From **Project Settings → API Keys**, copy the Project URL and the `sb_publishable_...` key. A legacy `anon` key also works.
+Run the full contents of [`supabase/setup.sql`](supabase/setup.sql) in the Supabase SQL Editor. It creates the private token table and functions, a private `recordings` Storage bucket, and a server-only `recording_uploads` metadata table.
 
-## 2. Set environment variables
+To issue a key, run this in the SQL Editor:
 
-For local development, copy `.env.local` to `.env.local` and set:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```sql
+select private.issue_access_token(interval '24 hours');
 ```
 
-In Vercel, add the same variables under **Project → Settings → Environment Variables** for Preview and Production, then redeploy. If the Supabase Vercel integration already created these variables, confirm the names and values match. Restart `npm run dev` after changing local variables.
+Copy the returned value and give it to one researcher. The database stores only its hash, so the raw key cannot be retrieved later. Run the query again for another key. You can set another lifetime, up to 30 days, by changing the interval.
 
-Never put a `service_role` or secret key in a `NEXT_PUBLIC_` variable. Only the publishable/anon key belongs in browser code; the RLS policies enforce per-user access.
+## 2. Configure environment variables
 
-## 3. Save a recording
+Copy `.env.example` to `.env.local` for local development and fill in these values:
 
-Sign in before recording. After you stop, choose **Save to Supabase** to upload the media and its session details. **Download copy** remains available for a local copy. The bucket is private; files are stored under the authenticated user's ID and are not publicly accessible.
+- `NEXT_PUBLIC_SUPABASE_URL`: project URL.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: publishable key used by the browser only for signed uploads.
+- `SUPABASE_SECRET_KEY`: server-only `sb_secret_...` key. A legacy service-role key is also accepted as `SUPABASE_SERVICE_ROLE_KEY`.
+- `ACCESS_SESSION_SECRET`: random server-only signing secret. Generate one with `openssl rand -base64 32`.
+
+Set the same four variables in Vercel for Production and Preview, then redeploy. Do not put the secret key or session secret in any `NEXT_PUBLIC_` variable or commit `.env.local`.
+
+## 3. Use the public recorder
+
+The researcher pastes the one-time key into the site. On redemption, the server asks Postgres to consume it, then opens a 30-minute session. The browser can record only during that session. Saving sends the file directly to the private bucket using a short-lived signed upload token, then the server records its title, type, duration, and size.
+
+The one-time key is consumed when access is granted; the researcher does not need another key for every recording during the 30-minute session. Access ends automatically after 30 minutes or when **End access** is selected.
