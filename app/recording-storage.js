@@ -61,7 +61,10 @@ export async function saveRecording(record, onProgress = () => {}) {
     await new Promise((resolve, reject) => {
       if (!state.upload) state.upload = new Upload(record.blob, {
         endpoint: state.uploadEndpoint,
-        headers: { 'x-signature': state.uploadToken },
+        headers: {
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          'x-signature': state.uploadToken,
+        },
         chunkSize: 6 * 1024 * 1024,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         uploadDataDuringCreation: true,
