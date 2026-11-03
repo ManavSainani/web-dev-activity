@@ -35,10 +35,26 @@ export function initializeRecorder() {
   let timerInterval = null;
   let recordingLimitTimeout = null;
   let startedAt = 0;
+  let accessGranted = false;
   const facingMode = 'environment';
   let toastTimer;
 
   sessionId.textContent = `FN—${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  recordButton.disabled = true;
+  function updateRecordingAccess(granted) {
+    accessGranted = granted;
+    if (!starting && !saving && recorder?.state !== 'recording') recordButton.disabled = !granted;
+    if (statusText && recorder?.state !== 'recording') {
+      statusText.textContent = granted ? 'READY TO RECORD' : 'ACCESS KEY REQUIRED';
+    }
+  }
+  window.addEventListener('recording-access-change', (event) => {
+    updateRecordingAccess(Boolean(event.detail?.active));
+  });
+  fetch('/api/access/session', { cache: 'no-store' })
+    .then((response) => response.json())
+    .then((session) => updateRecordingAccess(Boolean(session.active)))
+    .catch(() => updateRecordingAccess(false));
   const icons = {
     video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/>',
     audio: '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8" />'
@@ -83,6 +99,7 @@ export function initializeRecorder() {
     placeholder.hidden = false;
     overlay.hidden = true;
     recordButton.classList.remove('recording');
+    recordButton.disabled = !accessGranted;
     recordLabel.textContent = 'Start recording';
     status.classList.remove('recording');
     statusText.textContent = 'READY TO RECORD';
@@ -106,6 +123,20 @@ export function initializeRecorder() {
   }
   async function startRecording() {
     if (starting) return;
+    if (!accessGranted) {
+      try {
+        const response = await fetch('/api/access/session', { cache: 'no-store' });
+        const session = await response.json();
+        updateRecordingAccess(Boolean(session.active));
+      } catch {
+        updateRecordingAccess(false);
+      }
+      if (!accessGranted) {
+        $('#accessKey')?.focus();
+        notify('Enter a valid one-time key before starting a recording.');
+        return;
+      }
+    }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       notify('Recording is not supported in this browser. Try a recent version of Chrome, Edge, or Safari.');
       return;
@@ -166,12 +197,12 @@ export function initializeRecorder() {
       notify(message);
     } finally {
       starting = false;
-      recordButton.disabled = false;
+      recordButton.disabled = !accessGranted;
       modeButtons.forEach((button) => { button.disabled = false; });
     }
   }
   function finishRecording() {
-    recordButton.disabled = false;
+    recordButton.disabled = !accessGranted;
     modeButtons.forEach((button) => { button.disabled = false; });
     clearInterval(timerInterval);
     clearTimeout(recordingLimitTimeout);
@@ -211,6 +242,11 @@ export function initializeRecorder() {
   }
   saveButton.addEventListener('click', async () => {
     if (!completedRecording || saving) return;
+    if (!accessGranted) {
+      $('#accessKey')?.focus();
+      notify('Enter a valid one-time key before saving your recording.');
+      return;
+    }
     saving = true;
     saveButton.disabled = true;
     recordButton.disabled = true;
