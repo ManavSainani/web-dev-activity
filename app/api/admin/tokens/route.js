@@ -32,11 +32,17 @@ export async function POST(request) {
     });
     if (error) {
       console.error("Could not issue an access token:", error.message);
+      if (error.code === "PGRST202" || error.code === "42883") {
+        return NextResponse.json({ error: "The token generator function is missing. Run the latest supabase/setup.sql in the SQL Editor." }, { status: 503 });
+      }
       return NextResponse.json({ error: "Token creation failed. Check the Supabase setup." }, { status: 503 });
     }
     return NextResponse.json({ token, expiresInHours: hours });
   } catch (error) {
     console.error("Token creation request failed:", error.message);
+    if (error.message?.includes("server-only Supabase URL and secret key")) {
+      return NextResponse.json({ error: "Vercel is missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY. Add them for Production and redeploy." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Token creation is temporarily unavailable." }, { status: 503 });
   }
 }
