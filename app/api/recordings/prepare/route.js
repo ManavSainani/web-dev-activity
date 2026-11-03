@@ -19,6 +19,10 @@ export async function POST(request) {
 
   try {
     const supabase = getSupabaseAdminClient();
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!publishableKey) {
+      return NextResponse.json({ error: "Supabase publishable key is missing. Set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in Vercel and redeploy." }, { status: 503 });
+    }
     const { id } = details;
     const extension = details.content_type.includes("mp4") ? "mp4" : "webm";
     const objectPath = `${session.tokenId}/${id}.${extension}`;
@@ -47,7 +51,7 @@ export async function POST(request) {
       uploadUrl.hostname = uploadUrl.hostname.replace('.supabase.co', '.storage.supabase.co');
     }
     uploadUrl.pathname = '/storage/v1/upload/resumable';
-    return NextResponse.json({ id, path: objectPath, uploadToken: signedUpload.token, uploadEndpoint: uploadUrl.toString() });
+    return NextResponse.json({ id, path: objectPath, uploadToken: signedUpload.token, uploadEndpoint: uploadUrl.toString(), publishableKey });
   } catch (error) {
     console.error("Could not prepare recording upload:", error.message);
     return NextResponse.json({ error: "Could not prepare secure storage. Try again." }, { status: 503 });
