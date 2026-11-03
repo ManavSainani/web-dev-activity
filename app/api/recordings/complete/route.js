@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { ACCESS_COOKIE, readAccessSession } from "../../../../lib/access-session";
 import { getSupabaseAdminClient } from "../../../../lib/supabase-admin";
+import { UUID_PATTERN } from "../../../../lib/recording-details";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
-  if (typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id)) {
+  if (typeof id !== "string" || !UUID_PATTERN.test(id)) {
     return NextResponse.json({ error: "Invalid recording." }, { status: 400 });
   }
 
@@ -23,7 +24,7 @@ export async function POST(request) {
     const supabase = getSupabaseAdminClient();
     const { data: recording, error: findError } = await supabase
       .from("recording_uploads")
-      .select("id, object_path, status")
+      .select("id, object_path, status, file_size_bytes, content_type")
       .eq("id", id)
       .eq("access_token_id", session.tokenId)
       .maybeSingle();
@@ -38,13 +39,18 @@ export async function POST(request) {
       .from("recordings")
       .list(folder, { limit: 1, search: filename });
     if (listError) throw listError;
-    if (!files?.some((file) => file.name === filename)) {
+    const uploaded = files?.find((file) => file.name === filename);
+    if (!uploaded) {
       return NextResponse.json({ error: "The upload did not finish. Please retry." }, { status: 409 });
+    }
+    if (Number(uploaded.metadata?.size) !== recording.file_size_bytes ||
+        uploaded.metadata?.mimetype?.split(';')[0] !== recording.content_type) {
+      return NextResponse.json({ error: 'Uploaded file does not match the recording details.' }, { status: 409 });
     }
 
     const { error: updateError } = await supabase
       .from("recording_uploads")
-      .update({ status: "saved" })
+      .update({ status: "saved", saved_at: new Date().toISOString() })
       .eq("id", id)
       .eq("access_token_id", session.tokenId);
     if (updateError) throw updateError;

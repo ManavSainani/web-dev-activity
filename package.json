@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/*.test.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
@@ -12,6 +13,7 @@
     "@supabase/supabase-js": "^2.0.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tus-js-client": "^4.3.1"
   }
 }

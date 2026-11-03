@@ -1,4 +1,4 @@
-import { saveRecording } from './recording-storage';
+import { saveRecording, discardRecording } from './recording-storage';
 
 let initialized = false;
 const MAX_VIDEO_DURATION_MS = 60 * 60 * 1000;
@@ -31,6 +31,7 @@ export function initializeRecorder() {
   let completedRecording = null;
   let activeSessionId = null;
   let saving = false;
+  let starting = false;
   let timerInterval = null;
   let recordingLimitTimeout = null;
   let startedAt = 0;
@@ -65,6 +66,7 @@ export function initializeRecorder() {
     stopStream();
   }
   function resetRecording() {
+    if (completedRecording) discardRecording(completedRecording.id);
     if (recordingUrl) URL.revokeObjectURL(recordingUrl);
     recordingUrl = null;
     recordingBlob = null;
@@ -103,10 +105,14 @@ export function initializeRecorder() {
     return candidates.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
   }
   async function startRecording() {
+    if (starting) return;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       notify('Recording is not supported in this browser. Try a recent version of Chrome, Edge, or Safari.');
       return;
     }
+    starting = true;
+    recordButton.disabled = true;
+    modeButtons.forEach((button) => { button.disabled = true; });
     try {
       const constraints = mode === 'video'
         ? { audio: true, video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } }
@@ -126,7 +132,7 @@ export function initializeRecorder() {
       });
       recorder.addEventListener('stop', finishRecording, { once: true });
       recorder.start(1000);
-      if (mode === 'video') {
+      {
         const previousCode = sessionId.textContent;
         let nextCode;
         do {
@@ -140,7 +146,7 @@ export function initializeRecorder() {
         recordingLimitTimeout = setTimeout(() => {
           if (recorder?.state === 'recording') {
             recorder.stop();
-            notify('Video stopped automatically after reaching the 1-hour limit. Your recording is ready to download.');
+            notify('Video stopped automatically after reaching the 1-hour limit. Review it, then choose Save video.');
           }
         }, MAX_VIDEO_DURATION_MS);
       }
@@ -158,6 +164,10 @@ export function initializeRecorder() {
           ? 'No compatible camera or microphone was found on this device.'
           : 'Could not start recording. Check your device and try again.';
       notify(message);
+    } finally {
+      starting = false;
+      recordButton.disabled = false;
+      modeButtons.forEach((button) => { button.disabled = false; });
     }
   }
   function finishRecording() {
@@ -171,12 +181,14 @@ export function initializeRecorder() {
     completedRecording = {
       id: crypto.randomUUID(),
       sessionId: activeSessionId,
+      mode,
       blob: recordingBlob,
       mimeType,
       startedAt: new Date(startedAt).toISOString(),
-      durationMs: Date.now() - startedAt,
+      durationMs: mode === 'video' ? Math.min(Date.now() - startedAt, MAX_VIDEO_DURATION_MS) : Date.now() - startedAt,
     };
-    saveButton.hidden = mode !== 'video';
+    saveButton.hidden = false;
+    saveButton.textContent = mode === 'video' ? 'Save video' : 'Save audio';
     recordingUrl = URL.createObjectURL(recordingBlob);
     stopStream();
     if (mode === 'video') {
@@ -209,13 +221,13 @@ export function initializeRecorder() {
         ...completedRecording,
         title: $('#caseTitle').value.trim(),
         savedAt: new Date().toISOString(),
-      });
-      saveButton.textContent = 'Saved on this device';
-      notify(`Video saved on this device with session ${completedRecording.sessionId}.`);
-    } catch {
+      }, (percent) => { saveButton.textContent = percent === 100 ? 'Finishing save...' : `Saving ${percent}%`; });
+      saveButton.textContent = 'Saved';
+      notify(`Recording saved securely with session ${completedRecording.sessionId}.`);
+    } catch (error) {
       saveButton.disabled = false;
-      saveButton.textContent = 'Save video';
-      notify('Could not save the video. Check available browser storage and try again.');
+      saveButton.textContent = mode === 'video' ? 'Save video' : 'Save audio';
+      notify(error.message || 'Could not save the recording. Please try again.');
     } finally {
       saving = false;
       recordButton.disabled = false;
@@ -223,7 +235,7 @@ export function initializeRecorder() {
     }
   });
   recordButton.addEventListener('click', () => {
-    if (saving) return;
+    if (saving || starting) return;
     if (recorder?.state === 'recording') {
       recordButton.disabled = true;
       modeButtons.forEach((button) => { button.disabled = true; });

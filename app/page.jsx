@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { initializeRecorder } from "./recorder";
+import AccessKey from "./access-key";
 
 export default function Home() {
   useEffect(() => initializeRecorder(), []);
@@ -21,6 +22,7 @@ export default function Home() {
         <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>New recording</strong></div><div className="top-actions"><span className="secure"><i></i> Secure session</span><button className="help-button" aria-label="Help">?</button></div></header>
         <div className="content">
           <div className="page-heading"><div><div className="eyebrow">FIELD RECORDING</div><h1>Capture a moment.</h1><p className="subtitle">Create a secure audio or video recording for your research.</p></div><div className="session-id"><span>SESSION</span><strong id="sessionId">FN—000000</strong></div></div>
+          <AccessKey />
           <section className="recorder-card" aria-label="Recording controls">
             <div className="recorder-top"><div className="recorder-tabs" role="group" aria-label="Recording type"><button className="mode-button selected" data-mode="video" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg><span>Video</span></button><button className="mode-button" data-mode="audio" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3m-4 0h8"/></svg><span>Audio</span></button></div><div className="ready-indicator" id="status"><i></i><span>READY TO RECORD</span></div></div>
             <div className="stage" id="stage"><video id="livePreview" autoPlay muted playsInline hidden></video><div className="stage-placeholder" id="stagePlaceholder"><div className="stage-art"><span className="art-ring ring-one"></span><span className="art-ring ring-two"></span><span className="art-core"><svg id="stageIcon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span><span className="art-spark spark-a"></span><span className="art-spark spark-b"></span></div><strong id="stageTitle">Your camera is ready</strong><p id="stageDescription">Choose a recording type, then press record when you’re set.</p></div><div className="recording-overlay" id="recordingOverlay" hidden><span className="live-dot"></span><span>RECORDING</span><time id="timer">00:00</time></div><div className="stage-corner">FIELDNOTE&nbsp; / &nbsp;RECORDER 01</div></div>

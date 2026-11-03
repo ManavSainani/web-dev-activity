@@ -75,6 +75,9 @@ grant execute on function public.redeem_access_token(text) to service_role;
 create table if not exists public.recording_uploads (
   id uuid primary key default gen_random_uuid(),
   access_token_id uuid not null references private.access_tokens(id),
+  session_id text not null check (session_id ~ '^FN—[A-F0-9]{6}$'),
+  started_at timestamptz not null,
+  saved_at timestamptz,
   title text not null,
   mode text not null check (mode in ('audio', 'video')),
   object_path text not null unique,
@@ -84,6 +87,11 @@ create table if not exists public.recording_uploads (
   status text not null default 'pending' check (status in ('pending', 'saved')),
   created_at timestamptz not null default now()
 );
+-- Also upgrade projects that ran the original setup. Older records can retain
+-- null metadata; every new upload is validated by the prepare API.
+alter table public.recording_uploads add column if not exists session_id text;
+alter table public.recording_uploads add column if not exists started_at timestamptz;
+alter table public.recording_uploads add column if not exists saved_at timestamptz;
 alter table public.recording_uploads enable row level security;
 revoke all on table public.recording_uploads from public, anon, authenticated;
 grant select, insert, update on table public.recording_uploads to service_role;
