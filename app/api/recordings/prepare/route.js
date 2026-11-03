@@ -50,7 +50,9 @@ export async function POST(request) {
     if (uploadUrl.hostname.endsWith('.supabase.co')) {
       uploadUrl.hostname = uploadUrl.hostname.replace('.supabase.co', '.storage.supabase.co');
     }
-    uploadUrl.pathname = '/storage/v1/upload/resumable';
+    // Signed TUS uploads use the dedicated /sign endpoint. The regular
+    // /upload/resumable endpoint is for authenticated user session uploads.
+    uploadUrl.pathname = '/storage/v1/upload/resumable/sign';
     return NextResponse.json({ id, path: objectPath, uploadToken: signedUpload.token, uploadEndpoint: uploadUrl.toString(), publishableKey });
   } catch (error) {
     console.error("Could not prepare recording upload:", error.message);
