@@ -71,6 +71,19 @@ $$;
 revoke all on function public.redeem_access_token(text) from public, anon, authenticated;
 grant execute on function public.redeem_access_token(text) to service_role;
 
+-- Admin-only API wrapper. The service key remains on the server, and regular
+-- browser clients cannot call this function with the public publishable key.
+create or replace function public.issue_access_token(p_lifetime interval default interval '24 hours')
+returns text
+language sql
+security definer
+set search_path = ''
+as $$
+  select private.issue_access_token(p_lifetime);
+$$;
+revoke all on function public.issue_access_token(interval) from public, anon, authenticated;
+grant execute on function public.issue_access_token(interval) to service_role;
+
 -- Record metadata is only accessed by server routes using the secret key.
 create table if not exists public.recording_uploads (
   id uuid primary key default gen_random_uuid(),
