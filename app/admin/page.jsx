@@ -46,6 +46,7 @@ export default function AdminPage() {
   return (
     <main className={styles.page}>
       <a className={styles.brand} href="/">fieldnote<span>.</span></a>
+      <a className={styles.backLink} href="/">← Back to recordings</a>
       <section className={styles.card}>
         <div className="eyebrow">ADMINISTRATION</div>
         <h1>Create an access key.</h1>

@@ -40,11 +40,21 @@ export default function AccessKey() {
     } catch (error) { setMessage(error.message || 'Could not verify access. Please retry.'); }
     finally { setBusy(false); }
   }
-  if (active) return <p className="access-status" role="status">One-time key accepted. Recording is unlocked for this session.</p>;
-  return <form className="access-form" onSubmit={verify}>
-    <label htmlFor="accessKey">Researcher access key</label>
-    <div><input id="accessKey" type="password" autoComplete="off" inputMode="text" maxLength={64} minLength={64} pattern="[a-fA-F0-9]{64}" aria-describedby="accessKeyHelp" required value={key} onChange={(event) => setKey(event.target.value)} disabled={busy} placeholder="Paste your one-time key" /><button className="save-button" disabled={busy}>{busy ? 'Verifying...' : 'Unlock recording'}</button></div>
-    <small id="accessKeyHelp">This key works once. Your recording session expires after four hours.</small>
-    <p role="status">{message}</p>
-  </form>;
+  if (active) return null;
+  return <div className="access-overlay" role="dialog" aria-modal="true" aria-labelledby="accessKeyTitle">
+    <form className="access-form" onSubmit={verify}>
+      <div className="access-form-card">
+        <div className="eyebrow">RESEARCHER ACCESS</div>
+        <h2 id="accessKeyTitle">Unlock the recorder</h2>
+        <p className="access-intro">Enter your one-time access key to enable audio and video recording.</p>
+        <label htmlFor="accessKey">One-time access key</label>
+        <div className="access-input-row">
+          <input id="accessKey" type="password" autoComplete="off" inputMode="text" maxLength={64} minLength={64} pattern="[a-fA-F0-9]{64}" aria-describedby="accessKeyHelp" required value={key} onChange={(event) => setKey(event.target.value)} disabled={busy} placeholder="Paste your access key" />
+          <button className="save-button" disabled={busy}>{busy ? 'Checking...' : 'Unlock'}</button>
+        </div>
+        <small id="accessKeyHelp">Keys work once. Recording access lasts four hours.</small>
+        <p className="access-message" role="status">{message}</p>
+      </div>
+    </form>
+  </div>;
 }
